@@ -1,0 +1,6 @@
+# НИКОГДА не коммить секреты:
+api_credentials.json
+telegram_config.json
+market_overview.csv
+__pycache__/
+*.pyc

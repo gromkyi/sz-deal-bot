@@ -1,0 +1,41 @@
+{
+  "_comment": "Все настройки бота. Меняй числа здесь — код трогать не нужно.",
+
+  "budget": { "min_buy": 100000, "max_buy": 1000000000 },
+  "_budget_help": "min_buy/max_buy — диапазон ЦЕНЫ ПОКУПКИ 1 шт (ask), которую рассматриваем. Сейчас от 100k без верхнего предела.",
+
+  "min_liquidity_per_day": 5,
+  "auction_fee": 0.05,
+
+  "deal_min_price": 100000,
+  "_deal_min_help": "Сделки ищем только по предметам с медианой >= этой цены (дорогие ловим быстро; мелочь churn-ится). 0 = все.",
+  "wishlist_default_discount_pct": 20,
+  "_wishlist_disc_help": "Для предметов вишлиста без явной цены/скидки: алерт при цене на столько % ниже медианы.",
+
+  "exclude_categories": ["weapon_modules"],
+  "_exclude_help": "Категории, которые НЕ сканировать (у них слишком разные характеристики, медиана обманчива). Сравнение по префиксу: 'weapon_modules' уберёт и weapon_modules/...",
+
+  "quality_categories": ["artefact"],
+  "_quality_help": "Категории, где у предметов разное качество под одним id (артефакты): сравниваем цену внутри одного качества (qlt+потенциал+набор бонусов), а не по общей медиане.",
+  "min_sales_per_quality": 3,
+
+
+  "margin_tiers": [
+    { "max_price": 10000,   "min_margin_pct": 25 },
+    { "max_price": 100000,  "min_margin_pct": 20 },
+    { "max_price": 1000000, "min_margin_pct": 15 },
+    { "max_price": null,    "min_margin_pct": 10 }
+  ],
+  "_margin_help": "Порог чистой маржи (после комиссии) в зависимости от цены покупки. max_price=null — всё, что выше предыдущего.",
+
+  "display_blocks": [
+    { "label": "100k–1M", "max": 1000000 },
+    { "label": "1–5M",    "max": 5000000 },
+    { "label": "5M+",     "max": null }
+  ],
+  "_blocks_help": "Только для группировки сообщения. Предмет попадает в блок по цене покупки.",
+
+  "alert_cooldown_hours": 6,
+  "max_items_per_block": 10,
+  "sort_within_block": "profit"
+}
