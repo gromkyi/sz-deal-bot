@@ -183,10 +183,18 @@ def quality_key(add):
     bp = tuple(sorted(add.get("bonus_properties") or []))
     return (add.get("qlt"), add.get("ptn"), bp)
 
+RARITY = {0: ("⚪", "обычный"), 1: ("🟢", "необычный"), 2: ("🟣", "особый"),
+          3: ("🌸", "редкий"), 4: ("🔴", "исключительный"), 5: ("🟡", "легендарный")}
+
 def quality_label(add):
     add = add or {}
     parts = []
-    if add.get("qlt") is not None: parts.append(f"кач.{add['qlt']}")
+    q = add.get("qlt")
+    if q is not None:
+        if q in RARITY:
+            em, nm = RARITY[q]; parts.append(f"{em} {nm}")
+        else:
+            parts.append(f"кач.{q}")
     if add.get("ptn") is not None: parts.append(f"потенц.{add['ptn']}")
     bp = add.get("bonus_properties") or []
     if bp: parts.append(f"бонусов {len(bp)}")
