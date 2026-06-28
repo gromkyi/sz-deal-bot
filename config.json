@@ -35,7 +35,7 @@
   ],
   "_blocks_help": "Только для группировки сообщения. Предмет попадает в блок по цене покупки.",
 
-  "alert_cooldown_hours": 6,
+  "alert_cooldown_hours": 3,
   "max_items_per_block": 10,
   "sort_within_block": "profit"
 }
