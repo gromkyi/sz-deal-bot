@@ -18,9 +18,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 API_BASE = os.environ.get("STALZONE_API_BASE", "https://eapi.stalcraft.net")
 REGION   = os.environ.get("STALZONE_REGION", "RU")
 
+DATA_DIR = os.environ.get("DATA_DIR", HERE)   # на Railway указать на том (volume), чтобы антиспам/лог не сбрасывались
 WATCH = os.path.join(HERE, "watchlist.csv")
-STATE = os.path.join(HERE, "alerts_state.json")
-DEALS_LOG = os.path.join(HERE, "deals_log.csv")
+STATE = os.path.join(DATA_DIR, "alerts_state.json")
+DEALS_LOG = os.path.join(DATA_DIR, "deals_log.csv")
 CONFIG = os.path.join(HERE, "config.json")
 WISHLIST = os.path.join(HERE, "wishlist.csv")
 
