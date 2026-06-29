@@ -96,6 +96,20 @@ def cheapest_ask(data):
         if best is None or u < best: best = u
     return best
 
+def unit_asks(data, want_key=None):
+    """Отсортированный список цен за 1 шт по текущим лотам с выкупом.
+    want_key (для артефактов) — учитывать только лоты этого качества (см. quality_key)."""
+    lots = (data.get("lots") if isinstance(data, dict) else data) or []
+    out = []
+    for lot in lots:
+        amt = fnum(lot.get("amount")) or 1
+        p = fnum(lot.get("buyoutPrice"))
+        if p is None or p <= 0: continue
+        if want_key is not None and quality_key(lot.get("additional")) != want_key: continue
+        out.append(p/amt if amt else p)
+    out.sort()
+    return out
+
 def market(data):
     prices = (data.get("prices") if isinstance(data, dict) else data) or []
     units, times = [], []
@@ -235,8 +249,12 @@ def find_quality_deal(iid, H, cfg, fee, minliq, bmin, bmax):
         net = (med*(1-fee) - ask)/ask*100
         if net < threshold_for(ask, cfg["margin_tiers"]): continue
         cand = {"ask": ask, "med": med, "net": net, "profit": med*(1-fee)-ask,
-                "liq": liq, "qlabel": quality_label(lot.get("additional"))}
+                "liq": liq, "qlabel": quality_label(lot.get("additional")), "key": k}
         if best is None or cand["net"] > best["net"]: best = cand
+    if best:   # вторая цена рынка: конкуренты того же качества
+        asks = unit_asks(lots, best["key"])
+        best["next"] = asks[1] if len(asks) > 1 else None
+        best["below"] = sum(1 for a in asks if a < best["med"])
     return best
 
 def load_wishlist():
@@ -317,12 +335,13 @@ def main():
             deals.append({"id":iid,"name":name,"cat":cat,"ask":res["ask"],"med":res["med"],
                           "net":round(res["net"],1),"profit":round(res["profit"]),
                           "liq":round(res["liq"],1) if res["liq"] else "n/a",
-                          "block":block_for(res["ask"], cfg["display_blocks"]), "ql":res["qlabel"]})
+                          "block":block_for(res["ask"], cfg["display_blocks"]), "ql":res["qlabel"],
+                          "next":res.get("next"), "below":res.get("below")})
             state[qkey] = {"ask": res["ask"], "ts": now.isoformat()}
             continue
 
         try:
-            ask = cheapest_ask(api(f"auction/{iid}/lots?limit={LOTS_LIMIT}", H)); time.sleep(SLEEP_SEC)
+            asks = unit_asks(api(f"auction/{iid}/lots?limit={LOTS_LIMIT}", H)); time.sleep(SLEEP_SEC)
             med, liq = market(api(f"auction/{iid}/history?limit={HIST_LIMIT}", H)); time.sleep(SLEEP_SEC)
         except urllib.error.HTTPError as e:
             if e.code == 429: time.sleep(30)
@@ -330,6 +349,7 @@ def main():
         except Exception:
             continue
         checked += 1
+        ask = asks[0] if asks else None
         if ask is None or med is None: continue
         if not (bmin <= ask <= bmax): continue
         if liq is not None and liq < minliq: continue
@@ -344,7 +364,9 @@ def main():
         deals.append({"id":iid,"name":name,"cat":cat,"ask":ask,"med":med,
                       "net":round(net,1),"profit":round(med*(1-fee)-ask),
                       "liq":round(liq,1) if liq else "n/a",
-                      "block":block_for(ask, cfg["display_blocks"]), "ql":""})
+                      "block":block_for(ask, cfg["display_blocks"]), "ql":"",
+                      "next": (asks[1] if len(asks) > 1 else None),
+                      "below": sum(1 for a in asks if a < med)})
         state[iid] = {"ask": ask, "ts": now.isoformat()}
 
     print(f"Проверено {checked}, найдено сделок: {len(deals)}")
@@ -428,9 +450,13 @@ def build_messages(deals, wish, cfg, checked):
             for d in grp[:maxn]:
                 link = f"https://stalzone.wiki/items/{section(d['cat'])}/{d['id']}"
                 ql = f" <i>[{html.escape(str(d['ql']))}]</i>" if d.get("ql") else ""
+                ctx = []
+                if d.get("next"): ctx.append(f"конкурент {sp(d['next'])}")
+                if d.get("below"): ctx.append(f"ниже медианы {d['below']} лот.")
+                med_part = f"медиана {sp(d['med'])}" + (f" ({', '.join(ctx)})" if ctx else "")
                 lines.append(
                     f"• <a href=\"{link}\">{html.escape(str(d['name']))}</a>{ql}\n"
-                    f"   предложение {sp(d['ask'])} → медиана {sp(d['med'])} | <b>+{sp(d['profit'])}</b> ({d['net']}%) · ликв {d['liq']}/д"
+                    f"   предложение {sp(d['ask'])} → {med_part} | <b>+{sp(d['profit'])}</b> ({d['net']}%) · ликв {d['liq']}/д"
                 )
             if len(grp) > maxn:
                 lines.append(f"   …и ещё {len(grp)-maxn} (см. deals_log.csv)")
