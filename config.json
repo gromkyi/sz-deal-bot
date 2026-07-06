@@ -18,6 +18,8 @@
   "quality_categories": ["artefact"],
   "_quality_help": "Категории, где у предметов разное качество под одним id (артефакты): сравниваем цену внутри одного качества (qlt+потенциал+набор бонусов), а не по общей медиане.",
   "min_sales_per_quality": 3,
+  "exclude_upgraded_artifacts": true,
+  "_upgraded_help": "true = только голые артефакты (без заточки, upgrade_bonus=0). Заточенные с их неадекватными ценами не учитываются.",
 
 
   "margin_tiers": [

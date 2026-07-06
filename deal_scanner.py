@@ -215,6 +215,10 @@ def quality_label(add):
     if bp: parts.append(f"бонусов {len(bp)}")
     return ", ".join(parts) if parts else "базовый"
 
+def is_upgraded(add):
+    """Заточенный артефакт: upgrade_bonus > 0. Голый = 0/отсутствует."""
+    return float((add or {}).get("upgrade_bonus") or 0) > 0
+
 def find_quality_deal(iid, H, cfg, fee, minliq, bmin, bmax):
     """Артефакты: в каждом качестве берёт самый дешёвый лот и сравнивает со ВТОРОЙ мин. ценой
     того же качества (реалистичная перепродажа). Медиана/ликвидность — контекст. Лучший дил или None."""
@@ -222,11 +226,13 @@ def find_quality_deal(iid, H, cfg, fee, minliq, bmin, bmax):
     time.sleep(SLEEP_SEC)
     hist = api(f"auction/{iid}/history?limit=200&additional=true", H)
     min_n = int(cfg.get("min_sales_per_quality", 3))
+    bare_only = bool(cfg.get("exclude_upgraded_artifacts", True))   # только голые арты (без заточки)
     # история по качеству -> медиана (контекст) + ликвидность
     sales, times_ = {}, {}
     for s in (hist.get("prices") or []):
         p = fnum(s.get("price")); amt = fnum(s.get("amount")) or 1
         if p is None: continue
+        if bare_only and is_upgraded(s.get("additional")): continue
         k = quality_key(s.get("additional"))
         sales.setdefault(k, []).append(p/amt if amt else p)
         t = s.get("time")
@@ -238,6 +244,7 @@ def find_quality_deal(iid, H, cfg, fee, minliq, bmin, bmax):
     for lot in (lots.get("lots") or []):
         p = fnum(lot.get("buyoutPrice")); amt = fnum(lot.get("amount")) or 1
         if p is None or p <= 0: continue
+        if bare_only and is_upgraded(lot.get("additional")): continue
         k = quality_key(lot.get("additional"))
         qlots.setdefault(k, []).append((p/amt if amt else p, lot.get("additional")))
     best = None
