@@ -216,11 +216,13 @@ def quality_label(add):
     return ", ".join(parts) if parts else "базовый"
 
 def find_quality_deal(iid, H, cfg, fee, minliq, bmin, bmax):
-    """Артефакты: ищет лот дешевле медианы сделок ТОГО ЖЕ качества (qlt+потенциал+бонусы). Лучший дил или None."""
+    """Артефакты: в каждом качестве берёт самый дешёвый лот и сравнивает со ВТОРОЙ мин. ценой
+    того же качества (реалистичная перепродажа). Медиана/ликвидность — контекст. Лучший дил или None."""
     lots = api(f"auction/{iid}/lots?limit=200&additional=true", H)
     time.sleep(SLEEP_SEC)
     hist = api(f"auction/{iid}/history?limit=200&additional=true", H)
     min_n = int(cfg.get("min_sales_per_quality", 3))
+    # история по качеству -> медиана (контекст) + ликвидность
     sales, times_ = {}, {}
     for s in (hist.get("prices") or []):
         p = fnum(s.get("price")); amt = fnum(s.get("amount")) or 1
@@ -231,30 +233,33 @@ def find_quality_deal(iid, H, cfg, fee, minliq, bmin, bmax):
         if t:
             try: times_.setdefault(k, []).append(datetime.datetime.fromisoformat(t.replace("Z", "+00:00")))
             except Exception: pass
-    best = None
+    # текущие лоты по качеству
+    qlots = {}
     for lot in (lots.get("lots") or []):
         p = fnum(lot.get("buyoutPrice")); amt = fnum(lot.get("amount")) or 1
         if p is None or p <= 0: continue
-        ask = p/amt if amt else p
-        if not (bmin <= ask <= bmax): continue
         k = quality_key(lot.get("additional"))
+        qlots.setdefault(k, []).append((p/amt if amt else p, lot.get("additional")))
+    best = None
+    for k, arr in qlots.items():
+        arr.sort(key=lambda x: x[0])
+        if len(arr) < 2: continue                 # нет второй цены — не с чем сравнивать
+        ask = arr[0][0]; ref = arr[1][0]          # 1-я и 2-я мин. цена этого качества
+        if not (bmin <= ask <= bmax): continue
         ks = sales.get(k, [])
-        if len(ks) < min_n: continue
-        med = statistics.median(ks)
+        med = statistics.median(ks) if len(ks) >= min_n else None
         tk = times_.get(k, []); liq = None
         if len(tk) >= 2:
             span = (max(tk)-min(tk)).total_seconds()/86400
             liq = (len(tk)-1)/span if span > 0 else 999
         if liq is not None and liq < minliq: continue
-        net = (med*(1-fee) - ask)/ask*100
+        net = (ref*(1-fee) - ask)/ask*100
         if net < threshold_for(ask, cfg["margin_tiers"]): continue
-        cand = {"ask": ask, "med": med, "net": net, "profit": med*(1-fee)-ask,
-                "liq": liq, "qlabel": quality_label(lot.get("additional")), "key": k}
+        below = sum(1 for pr, _ in arr if med is not None and pr < med)
+        cand = {"ask": ask, "ref": ref, "med": (round(med) if med is not None else None),
+                "net": net, "profit": ref*(1-fee)-ask, "liq": liq,
+                "qlabel": quality_label(arr[0][1]), "below": below}
         if best is None or cand["net"] > best["net"]: best = cand
-    if best:   # вторая цена рынка: конкуренты того же качества
-        asks = unit_asks(lots, best["key"])
-        best["next"] = asks[1] if len(asks) > 1 else None
-        best["below"] = sum(1 for a in asks if a < best["med"])
     return best
 
 def load_wishlist():
@@ -332,11 +337,11 @@ def main():
                 except Exception: last = None
                 if last and (now-last).total_seconds() < cooldown and res["ask"] >= st.get("ask", 0)*0.95:
                     continue
-            deals.append({"id":iid,"name":name,"cat":cat,"ask":res["ask"],"med":res["med"],
+            deals.append({"id":iid,"name":name,"cat":cat,"ask":res["ask"],"med":res.get("med"),"ref":res["ref"],
                           "net":round(res["net"],1),"profit":round(res["profit"]),
                           "liq":round(res["liq"],1) if res["liq"] else "n/a",
                           "block":block_for(res["ask"], cfg["display_blocks"]), "ql":res["qlabel"],
-                          "next":res.get("next"), "below":res.get("below")})
+                          "below":res.get("below")})
             state[qkey] = {"ask": res["ask"], "ts": now.isoformat()}
             continue
 
@@ -350,10 +355,11 @@ def main():
             continue
         checked += 1
         ask = asks[0] if asks else None
-        if ask is None or med is None: continue
+        ref = asks[1] if len(asks) > 1 else None   # 2-я мин. цена рынка = реалистичная перепродажа
+        if ask is None or ref is None: continue
         if not (bmin <= ask <= bmax): continue
         if liq is not None and liq < minliq: continue
-        net = (med*(1-fee) - ask)/ask*100
+        net = (ref*(1-fee) - ask)/ask*100
         if net < threshold_for(ask, cfg["margin_tiers"]): continue
         st = state.get(iid)
         if st:
@@ -361,12 +367,11 @@ def main():
             except Exception: last = None
             if last and (now-last).total_seconds() < cooldown and ask >= st.get("ask", 0)*0.95:
                 continue
-        deals.append({"id":iid,"name":name,"cat":cat,"ask":ask,"med":med,
-                      "net":round(net,1),"profit":round(med*(1-fee)-ask),
+        deals.append({"id":iid,"name":name,"cat":cat,"ask":ask,"med":med,"ref":ref,
+                      "net":round(net,1),"profit":round(ref*(1-fee)-ask),
                       "liq":round(liq,1) if liq else "n/a",
                       "block":block_for(ask, cfg["display_blocks"]), "ql":"",
-                      "next": (asks[1] if len(asks) > 1 else None),
-                      "below": sum(1 for a in asks if a < med)})
+                      "below": sum(1 for a in asks if med is not None and a < med)})
         state[iid] = {"ask": ask, "ts": now.isoformat()}
 
     print(f"Проверено {checked}, найдено сделок: {len(deals)}")
@@ -417,9 +422,12 @@ def main():
     new = not os.path.exists(DEALS_LOG)
     with open(DEALS_LOG, "a", newline="", encoding="utf-8-sig") as f:
         w = csv.writer(f)
-        if new: w.writerow(["timestamp","id","name","category","ask","market_median","net_margin_pct","profit_per_unit","liq_per_day","block"])
+        if new: w.writerow(["timestamp","id","name","category","ask","market_2nd","market_median","net_margin_pct","profit_per_unit","liq_per_day","block"])
         for d in deals:
-            w.writerow([now.isoformat(),d["id"],d["name"],d["cat"],round(d["ask"]),round(d["med"]),d["net"],d["profit"],d["liq"],d["block"]])
+            w.writerow([now.isoformat(),d["id"],d["name"],d["cat"],round(d["ask"]),
+                        round(d["ref"]) if d.get("ref") is not None else "",
+                        round(d["med"]) if d.get("med") is not None else "",
+                        d["net"],d["profit"],d["liq"],d["block"]])
 
     for _m in build_messages(deals, wish, cfg, checked):
         send_telegram(_m)
@@ -451,12 +459,12 @@ def build_messages(deals, wish, cfg, checked):
                 link = f"https://stalzone.wiki/items/{section(d['cat'])}/{d['id']}"
                 ql = f" <i>[{html.escape(str(d['ql']))}]</i>" if d.get("ql") else ""
                 ctx = []
-                if d.get("next"): ctx.append(f"конкурент {sp(d['next'])}")
+                if d.get("med"): ctx.append(f"медиана {sp(d['med'])}")
                 if d.get("below"): ctx.append(f"ниже медианы {d['below']} лот.")
-                med_part = f"медиана {sp(d['med'])}" + (f" ({', '.join(ctx)})" if ctx else "")
+                ctxs = (" · " + " · ".join(ctx)) if ctx else ""
                 lines.append(
                     f"• <a href=\"{link}\">{html.escape(str(d['name']))}</a>{ql}\n"
-                    f"   предложение {sp(d['ask'])} → {med_part} | <b>+{sp(d['profit'])}</b> ({d['net']}%) · ликв {d['liq']}/д"
+                    f"   предложение {sp(d['ask'])} → 2-я цена {sp(d['ref'])} | <b>+{sp(d['profit'])}</b> ({d['net']}%) · ликв {d['liq']}/д{ctxs}"
                 )
             if len(grp) > maxn:
                 lines.append(f"   …и ещё {len(grp)-maxn} (см. deals_log.csv)")

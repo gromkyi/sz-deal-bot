@@ -9,7 +9,7 @@
 
   "deal_min_price": 100000,
   "_deal_min_help": "Сделки ищем только по предметам с медианой >= этой цены (дорогие ловим быстро; мелочь churn-ится). 0 = все.",
-  "wishlist_default_discount_pct": 20,
+  "wishlist_default_discount_pct": 25,
   "_wishlist_disc_help": "Для предметов вишлиста без явной цены/скидки: алерт при цене на столько % ниже медианы.",
 
   "exclude_categories": ["weapon_modules"],
