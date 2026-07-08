@@ -254,16 +254,17 @@ def find_quality_deal(iid, H, cfg, fee, minliq, bmin, bmax):
         ask = arr[0][0]; ref = arr[1][0]          # 1-я и 2-я мин. цена этого качества
         if not (bmin <= ask <= bmax): continue
         ks = sales.get(k, [])
-        med = statistics.median(ks) if len(ks) >= min_n else None
+        if len(ks) < min_n: continue                  # нужно достаточно реальных сделок этого качества
+        med = statistics.median(ks)
         tk = times_.get(k, []); liq = None
         if len(tk) >= 2:
             span = (max(tk)-min(tk)).total_seconds()/86400
             liq = (len(tk)-1)/span if span > 0 else 999
-        if liq is not None and liq < minliq: continue
+        if liq is None or liq < minliq: continue      # требуем реальную ликвидность (не n/a)
         net = (ref*(1-fee) - ask)/ask*100
         if net < threshold_for(ask, cfg["margin_tiers"]): continue
-        below = sum(1 for pr, _ in arr if med is not None and pr < med)
-        cand = {"ask": ask, "ref": ref, "med": (round(med) if med is not None else None),
+        below = sum(1 for pr, _ in arr if pr < med)
+        cand = {"ask": ask, "ref": ref, "med": round(med),
                 "net": net, "profit": ref*(1-fee)-ask, "liq": liq,
                 "qlabel": quality_label(arr[0][1]), "below": below}
         if best is None or cand["net"] > best["net"]: best = cand
