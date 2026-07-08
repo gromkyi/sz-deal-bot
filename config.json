@@ -23,10 +23,10 @@
 
 
   "margin_tiers": [
-    { "max_price": 10000,   "min_margin_pct": 25 },
-    { "max_price": 100000,  "min_margin_pct": 20 },
-    { "max_price": 1000000, "min_margin_pct": 15 },
-    { "max_price": null,    "min_margin_pct": 10 }
+    { "max_price": 10000,   "min_margin_pct": 35 },
+    { "max_price": 100000,  "min_margin_pct": 30 },
+    { "max_price": 1000000, "min_margin_pct": 25 },
+    { "max_price": null,    "min_margin_pct": 20 }
   ],
   "_margin_help": "Порог чистой маржи (после комиссии) в зависимости от цены покупки. max_price=null — всё, что выше предыдущего.",
 
