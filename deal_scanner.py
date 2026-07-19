@@ -263,6 +263,7 @@ def find_quality_deal(iid, H, cfg, fee, minliq, bmin, bmax):
         if liq is None or liq < minliq: continue      # требуем реальную ликвидность (не n/a)
         net = (ref*(1-fee) - ask)/ask*100
         if net < threshold_for(ask, cfg["margin_tiers"]): continue
+        if ask >= med: continue   # предложение должно быть ниже медианы
         below = sum(1 for pr, _ in arr if pr < med)
         cand = {"ask": ask, "ref": ref, "med": round(med),
                 "net": net, "profit": ref*(1-fee)-ask, "liq": liq,
@@ -369,6 +370,7 @@ def main():
         if liq is not None and liq < minliq: continue
         net = (ref*(1-fee) - ask)/ask*100
         if net < threshold_for(ask, cfg["margin_tiers"]): continue
+        if med is None or ask >= med: continue   # предложение должно быть ниже медианы
         st = state.get(iid)
         if st:
             try: last = datetime.datetime.fromisoformat(st["ts"])
